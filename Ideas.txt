@@ -1,0 +1,4 @@
+Ideas:
+
+--Genetic programming fruit score function, height
+--
