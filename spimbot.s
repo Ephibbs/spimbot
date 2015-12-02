@@ -11,30 +11,41 @@ PRINT_INT     = 0xffff0080
 OTHER_BOT_X   = 0xffff00a0
 OTHER_BOT_Y   = 0xffff00a4
 
-BONK_MASK     = 0x1000
-BONK_ACK      = 0xffff0060
-
-SCAN_X        = 0xffff0050
-SCAN_Y        = 0xffff0054
-SCAN_RADIUS   = 0xffff0058
-SCAN_ADDRESS  = 0xffff005c
-SCAN_MASK     = 0x2000
-SCAN_ACK      = 0xffff0064
-
 TIMER         = 0xffff001c
 TIMER_MASK    = 0x8000
 TIMER_ACK     = 0xffff006c
 
+BONK_MASK     = 0x1000
+BONK_ACK      = 0xffff0060
+
+PUZZLE_MASK   = 0x800
+PUZZLE_ACK    = 0xffff00d8
+
+REQUEST_PUZZLE = 0xffff00d0
+REQUEST_WORD = 0xffff00d4
+
+smoosh_count: .word 0
+.data 
+.align 2
+fruit_data: .space 260
+node_mem: .space 4096
+.align 1
+puzzle_grid: .space 8192
+puzzle_word: .space 128
+
 .text
 main:
-	# go wild
-	# the world is your oyster
 	li	$t4, TIMER_MASK		# timer interrupt enable bit
 	or	$t4, $t4, BONK_MASK	# bonk interrupt bit
+	or	$t4, $t4, PUZZLE_MASK	# bonk interrupt bit
 	or	$t4, $t4, 1		# global interrupt enable
 	mtc0	$t4, $12		# set interrupt mask (Status register)
 	li $t1, 0
 	sw $t1, VELOCITY
+	
+	la $a0, puzzle_grid
+	sw $a0, REQUEST_PUZZLE
+	
 loop:
 	j loop
 	jr	$ra
@@ -67,8 +78,9 @@ interrupt_dispatch:			# Interrupt:
 
 	and	$a0, $k0, TIMER_MASK	# is there a timer interrupt?
 	bne	$a0, 0, timer_interrupt
-
-	# add dispatch for other interrupt types here.
+	
+	and	$a0, $k0, PUZZLE_MASK	# is there a puzzle interrupt?                
+	bne	$a0, 0, puzzle_interrupt   
 
 	li	$v0, PRINT_STRING	# Unhandled interrupt types
 	la	$a0, unhandled_str
@@ -83,6 +95,16 @@ bonk_interrupt:
 	li $t1, -10
 	sw	$t1, VELOCITY		# ???
 
+	j	interrupt_dispatch	# see if other interrupts are waiting
+
+puzzle_interrupt:
+	sw	$a1, PUZZLE_ACK		# acknowledge interrupt
+
+	la $t1, puzzle_word
+	sw $t1, REQUEST_WORD
+
+	
+	
 	j	interrupt_dispatch	# see if other interrupts are waiting
 
 timer_interrupt:
