@@ -119,10 +119,17 @@ puzzle_interrupt:
 	sw $a1, REQUEST_WORD
 
 	add $a0, $t9, 8
+	lw $s0, 0($t9) #num_row
+	lw $s1, 4($t9) #num_col
+	#loaded first 2 args
+	
+	#TWERK HERE
 	li $a2, 0
-	li $a2, 0
+	li $a3, 0
 
 	jal search_neighbors
+
+	#found and submit
 	sw $v0, SUBMIT_SOLUTION	
 	li $t8, 1	
 	j	interrupt_dispatch	# see if other interrupts are waiting
