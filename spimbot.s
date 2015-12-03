@@ -64,6 +64,10 @@ puz_req:
 	sw $t9, REQUEST_PUZZLE
 	li $t8, 0
 	j loop
+
+####################
+#####Interrupts#####
+####################
 	
 .kdata				# interrupt handler data (separated just for readability)
 chunkIH:	.space 8	# space for two registers
@@ -118,16 +122,27 @@ puzzle_interrupt:
 	la $a1, puzzle_word
 	sw $a1, REQUEST_WORD
 
-	add $a0, $t9, 8
-	lw $s0, 0($t9) #num_row
-	lw $s1, 4($t9) #num_col
+	add $a0, $t9, 8 	# pointer to puzzle
+	lw $s0, 0($t9) 		# num_row
+	lw $s1, 4($t9) 		# num_col
 	#loaded first 2 args
 	
-	#TWERK HERE
-	li $a2, 0
-	li $a3, 0
+	li $t7, 0 	# counter
 
-	jal search_neighbors
+	puzzle_loop:
+		add $t6, $a0, $t7
+		lw $t6, 0($t6)
+		lw $t5, 0($a1)
+		beq $t6, $t5, got_first_letter
+		add $t7, $t7, 4 	# increment
+		j puzzle_loop
+
+	got_first_letter:
+		mod $v3, $t7, $s0 	# curr_col
+		sub $v2, $t7, $v3
+		div $v2, $v2, $s0	 # curr_row
+		jal search_neighbors
+		beq $v0, 0, puzzle_loop
 
 	#found and submit
 	sw $v0, SUBMIT_SOLUTION	
@@ -162,6 +177,9 @@ done:
 .set at 
 	eret
 
+####################
+##### Set Node #####
+####################
 
 .globl set_node
 set_node:
@@ -182,6 +200,10 @@ set_node:
 	lw	$ra, 0($sp)
 	add	$sp, $sp, 16
 	jr	$ra
+
+#####################
+####Set Neighbors####
+#####################
 
 .globl search_neighbors
 search_neighbors:
