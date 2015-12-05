@@ -53,14 +53,19 @@ main:
 	mtc0	$t4, $12		# set interrupt mask (Status register)
 	li $t1, 10
 	sw $t1, VELOCITY
-	li $t8, 1		
+	li $t8, 1	
 
 loop:
 	beq $t8, 1, puz_req
-	lw $t0, BOT_X
-	blt $t0, 10, rev_pos
-	bgt $t0, 290, rev_neg
-	j loop
+	lw $t0, OTHER_BOT_X
+	lw $t1, BOT_X
+	sub $t0, $t0, $t1	
+	bgt $t0, 0, rev_pos
+	j rev_neg
+
+move_pos:
+	li $t1, 10
+	sw $t1, VELOCITY
 
 puz_req:
 	la $t9, puzzle_grid
