@@ -27,6 +27,10 @@ SUBMIT_SOLUTION = 0xffff00d4
 
 smoosh_count: .word 0
 .data 
+three:	.float	3.0
+five:	.float	5.0
+PI:	.float	3.141592
+F180:	.float  180.0
 .align 2
 fruit_data: .space 260
 node_memory: .space 4096
@@ -49,19 +53,45 @@ main:
 	li	$t4, TIMER_MASK		# timer interrupt enable bit
 	or	$t4, $t4, BONK_MASK	# bonk interrupt bit
 	or	$t4, $t4, PUZZLE_MASK	# bonk interrupt bit
+	or	$t4, $t4, SMOOSHED_MASK	# smoosh interrupt bit
 	or	$t4, $t4, 1		# global interrupt enable
 	mtc0	$t4, $12		# set interrupt mask (Status register)
-	li $t1, 10
+	#check if other bot exists--existance in t7 reg 1->true 0->false
+	li $t1, 0
 	sw $t1, VELOCITY
 	li $t8, 1	
+	lw $t0, OTHER_BOT_X
+	li $t7, 1
+	beq	$t0, 0 no_bot
+	j loop
+
+no_bot:
+	li $t7, 0
 
 loop:
 	beq $t8, 1, puz_req
+	beq $t7, 1 follow
+	#othewise collect fruit
+	j loop
+
+follow:
 	lw $t0, OTHER_BOT_X
 	lw $t1, BOT_X
-	sub $t0, $t0, $t1	
-	bgt $t0, 0, rev_pos
-	j rev_neg
+	lw $t2, OTHER_BOT_Y
+	lw $t3, BOT_Y
+	sub $a0, $t0, $t1	
+	sub $a1, $t2, $t3	
+	sub $a1, $a1, 10
+	j sb_arctan
+
+follow2:
+	move $t1, $s0
+	sw $t1, ANGLE
+	li $t1, 1
+	sw $t1, ANGLE_CONTROL
+	li $t1, 10
+	sw $t1, VELOCITY
+	j loop
 
 move_pos:
 	li $t1, 10
@@ -89,6 +119,62 @@ rev_neg:
 	sw	$t1, VELOCITY		# ???
 	j loop
 
+# -----------------------------------------------------------------------
+# sb_arctan - computes the arctangent of y / x
+# $a0 - x
+# $a1 - y
+# returns the arctangent
+# -----------------------------------------------------------------------
+
+sb_arctan:
+	li	$s0, 0		# angle = 0;
+
+	abs	$t0, $a0	# get absolute values
+	abs	$t1, $a1
+	ble	$t1, $t0, no_TURN_90	  
+
+	## if (abs(y) > abs(x)) { rotate 90 degrees }
+	move	$t0, $a1	# int temp = y;
+	neg	$a1, $a0	# y = -x;      
+	move	$a0, $t0	# x = temp;    
+	li	$s0, 90		# angle = 90;  
+
+no_TURN_90:
+	bgez	$a0, pos_x 	# skip if (x >= 0)
+
+	## if (x < 0) 
+	add	$s0, $s0, 180	# angle += 180;
+
+pos_x:
+	mtc1	$a0, $f0
+	mtc1	$a1, $f1
+	cvt.s.w $f0, $f0	# convert from ints to floats
+	cvt.s.w $f1, $f1
+	
+	div.s	$f0, $f1, $f0	# float v = (float) y / (float) x;
+
+	mul.s	$f1, $f0, $f0	# v^^2
+	mul.s	$f2, $f1, $f0	# v^^3
+	l.s	$f3, three	# load 5.0
+	div.s 	$f3, $f2, $f3	# v^^3/3
+	sub.s	$f6, $f0, $f3	# v - v^^3/3
+
+	mul.s	$f4, $f1, $f2	# v^^5
+	l.s	$f5, five	# load 3.0
+	div.s 	$f5, $f4, $f5	# v^^5/5
+	add.s	$f6, $f6, $f5	# value = v - v^^3/3 + v^^5/5
+
+	l.s	$f8, PI		# load PI
+	div.s	$f6, $f6, $f8	# value / PI
+	l.s	$f7, F180	# load 180.0
+	mul.s	$f6, $f6, $f7	# 180.0 * value / PI
+
+	cvt.w.s $f6, $f6	# convert "delta" back to integer
+	mfc1	$t0, $f6
+	add	$s0, $s0, $t0	# angle += delta
+	
+	j follow2
+	
 ####################
 #####Interrupts#####
 ####################
@@ -124,6 +210,9 @@ interrupt_dispatch:			# Interrupt:
 	
 	and	$a0, $k0, PUZZLE_MASK	# is there a puzzle interrupt?                
 	bne	$a0, 0, puzzle_interrupt   
+	
+	and	$a0, $k0, SMOOSHED_MASK
+	bne	$a0, 0, smoosh_interrupt
 
 	li	$v0, PRINT_STRING	# Unhandled interrupt types
 	la	$a0, unhandled_str
@@ -149,8 +238,15 @@ puzzle_interrupt:
 	li $t8, 1	
 	beq $v0, 0, interrupt_dispatch
 	sw $v0, SUBMIT_SOLUTION	
-	sw $0, PRINT_INT
 
+	j	interrupt_dispatch	# see if other interrupts are waiting
+
+smoosh_interrupt:
+	sw	$a1, SMOOSHED_ACK		# acknowledge interrupt
+	la $t0, smoosh_count
+	lw $t1, 0($t0)
+	add $t1, $t1, 1
+	sw $t1, 0($t0)
 	j	interrupt_dispatch	# see if other interrupts are waiting
 
 timer_interrupt:

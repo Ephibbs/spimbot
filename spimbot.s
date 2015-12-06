@@ -48,18 +48,23 @@ puzzle_word: .space 128
 main:
 	li	$t4, TIMER_MASK		# timer interrupt enable bit
 	or	$t4, $t4, BONK_MASK	# bonk interrupt bit
-	or	$t4, $t4, PUZZLE_MASK	# bonk interrupt bit
+	or	$t4, $t4, PUZZLE_MASK	# puzzle interrupt bit
+	or	$t4, $t4, SMOOSHED_MASK	# smoosh interrupt bit
 	or	$t4, $t4, 1		# global interrupt enable
 	mtc0	$t4, $12		# set interrupt mask (Status register)
-	li $t1, 10
-	sw $t1, VELOCITY
 	li $t8, 1		
 
 loop:
 	beq $t8, 1, puz_req
+	li $t1,  220
+	sw $t1, ANGLE
+	li $t1, 1
+	sw $t1, ANGLE_CONTROL
+	li $t1, 10
+	sw $t1, VELOCITY
 	lw $t0, BOT_X
-	blt $t0, 10, rev_pos
-	bgt $t0, 290, rev_neg
+	#blt $t0, 10, rev_pos
+	#bgt $t0, 290, rev_neg
 	j loop
 
 puz_req:
@@ -144,7 +149,6 @@ puzzle_interrupt:
 	li $t8, 1	
 	beq $v0, 0, interrupt_dispatch
 	sw $v0, SUBMIT_SOLUTION	
-	sw $0, PRINT_INT
 
 	j	interrupt_dispatch	# see if other interrupts are waiting
 
