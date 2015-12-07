@@ -21,9 +21,18 @@ BONK_ACK      = 0xffff0060
 PUZZLE_MASK   = 0x800
 PUZZLE_ACK    = 0xffff00d8
 
+SMOOSHED_MASK	= 0x2000
+SMOOSHED_ACK	= 0xffff0064
+
+
 REQUEST_PUZZLE = 0xffff00d0
 REQUEST_WORD = 0xffff00dc
 SUBMIT_SOLUTION = 0xffff00d4
+
+GET_ENERGY = 0xffff00c8
+# fruit constants
+FRUIT_SCAN	= 0xffff005c
+FRUIT_SMASH	= 0xffff0068
 
 smoosh_count: .word 0
 .data 
@@ -48,21 +57,91 @@ puzzle_word: .space 128
 main:
 	li	$t4, TIMER_MASK		# timer interrupt enable bit
 	or	$t4, $t4, BONK_MASK	# bonk interrupt bit
-	or	$t4, $t4, PUZZLE_MASK	# puzzle interrupt bit
-	or	$t4, $t4, SMOOSHED_MASK	# smoosh interrupt bit
+	or	$t4, $t4, PUZZLE_MASK	# bonk interrupt bit
 	or	$t4, $t4, 1		# global interrupt enable
 	mtc0	$t4, $12		# set interrupt mask (Status register)
-	li $t8, 1		
+	li 	$t1, 10
+	#sw $t1, VELOCITY
+	li	$t8, 1
+	
+charge:
+	sw	$0, VELOCITY
+	lw 	$s0, GET_ENERGY
+	bge	$s0, 250, start	
+	beq	$t8, 0, charge
+	la 	$t9, puzzle_grid
+	sw 	$t9, REQUEST_PUZZLE
+	li	$t8, 0
+	j	charge
 
-loop:
-	beq $t8, 1, puz_req
-	li $t1,  220
+get_back:
+	li	$t0, 10
+	sw	$t0, VELOCITY
+	lw	$t0, BOT_Y
+	ble	$t0, 270, charge
+	j	get_back
+
+start:
+	sw	$0, VELOCITY
+	li	$t0, 0
+	sw	$t0, ANGLE
+	li 	$t1, 1
+	sw 	$t1, ANGLE_CONTROL
+
+sel:
+	la	$t0, fruit_data
+	sw	$t0, FRUIT_SCAN
+	lw	$t1, 0($t0)
+	beq	$t1, 0, end
+
+	#lw	$t7, num_smooshed
+	lw 	$s0, GET_ENERGY
+	ble	$s0, 200, go_smash
+	#bge 	$t7, 5, go_smash
+
+	lw	$t2, BOT_X
+	lw	$t3, 8($t0) 	#fruit-x
+	sub	$t4, $t3, $t2
+	beq	$t4, $0, stop
+	slt 	$t5, $t4, 10
+	sgt 	$t6, $t4, -10
+	and 	$t7, $t5, $t6
+	beq	$t7, 1, update
+	blt	$t4, $0, go_left
+	bgt	$t4, $0, go_right
+
+stop:
+	li	$t4, 0
+	j	update
+go_left:
+	li	$t4, -10
+	j	update
+go_right:
+	li	$t4, 10
+	j	update
+update:
+	sw	$t4, VELOCITY
+	j	sel
+end:
+	j	sel
+go_smash:
+	li $t1, 90
 	sw $t1, ANGLE
 	li $t1, 1
 	sw $t1, ANGLE_CONTROL
 	li $t1, 10
 	sw $t1, VELOCITY
-	lw $t0, BOT_X
+	j go_to_smash_site
+
+go_to_smash_site:
+	lw $t1, ANGLE
+	beq $t1, 270, get_back
+	j go_to_smash_site
+	
+
+loop:
+	beq $t8, 1, puz_req
+	#lw $t0, BOT_X
 	#blt $t0, 10, rev_pos
 	#bgt $t0, 290, rev_neg
 	j loop
@@ -71,23 +150,9 @@ puz_req:
 	la $t9, puzzle_grid
 	sw $t9, REQUEST_PUZZLE
 	li $t8, 0
-	j loop
+	j charge
 
-rev_pos:
-	lw $t2, VELOCITY
-	bge $t2, 0, loop
-	li $t1, -1
-	mul $t1, $t1, $t2 
-	sw	$t1, VELOCITY		# ???
-	j loop
 
-rev_neg:
-	lw $t2, VELOCITY
-	ble $t2, 0, loop
-	li $t1, -1
-	mul $t1, $t1, $t2 
-	sw	$t1, VELOCITY		# ???
-	j loop
 
 ####################
 #####Interrupts#####
@@ -131,8 +196,31 @@ interrupt_dispatch:			# Interrupt:
 	j	done
 
 bonk_interrupt:
-	sw	$a1, BONK_ACK		# acknowledge interrupt
-	j	interrupt_dispatch	# see if other interrupts are waiting
+	#sw	$a1, BONK_ACK		# acknowledge interrupt
+	#j	interrupt_dispatch	# see if other interrupts are waiting
+	sw	$0, VELOCITY
+
+	lw	$t0, BOT_Y
+	blt	$t0, 270, bonk_ret
+	
+	smash_fruit:
+		beq $0, $s7, finished_smashing
+		
+		sw $s7, FRUIT_SMASH
+		
+		sub $s7, $s7, 1
+		j 	smash_fruit
+
+	finished_smashing:
+		li	$t0, 270
+		sw	$t0, ANGLE
+		li 	$t1, 1
+		sw 	$t1, ANGLE_CONTROL
+
+	bonk_ret:
+		sw	$a1, BONK_ACK		# acknowledge interrupt
+		j	interrupt_dispatch	# see if other interrupts are waiting
+
 
 puzzle_interrupt:
 	sw	$a1, PUZZLE_ACK		# acknowledge interrupt
@@ -149,6 +237,7 @@ puzzle_interrupt:
 	li $t8, 1	
 	beq $v0, 0, interrupt_dispatch
 	sw $v0, SUBMIT_SOLUTION	
+	#sw $0, PRINT_INT
 
 	j	interrupt_dispatch	# see if other interrupts are waiting
 
@@ -463,3 +552,7 @@ set_char:
 	jr	$ra
 
 
+    
+
+
+	
