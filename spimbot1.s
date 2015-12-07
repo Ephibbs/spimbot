@@ -28,6 +28,11 @@ REQUEST_PUZZLE = 0xffff00d0
 REQUEST_WORD = 0xffff00dc
 SUBMIT_SOLUTION = 0xffff00d4
 
+GET_ENERGY = 0xffff00c8
+# fruit constants
+FRUIT_SCAN	= 0xffff005c
+FRUIT_SMASH	= 0xffff0068
+
 smoosh_count: .word 0
 .data 
 three:	.float	3.0
@@ -65,13 +70,66 @@ main:
 	li $t8, 1	
 	lw $t0, OTHER_BOT_X
 	li $t7, 1
-	beq	$t0, 0 no_bot
+	li $s7, 0
+	beq	$t0, 0, no_bot
 	j loop
 
 no_bot:
-	li $t7, 0
+
+start:
+	sw	$0, VELOCITY
+	li	$t0, 0
+	sw	$t0, ANGLE
+	li 	$t1, 1
+	sw 	$t1, ANGLE_CONTROL
+
+sel:
+	la	$t0, fruit_data
+	sw	$t0, FRUIT_SCAN
+	lw	$t1, 0($t0)
+	beq	$t1, 0, update
+
+	#lw	$t7, num_smooshed
+	lw 	$s0, GET_ENERGY
+	bge	$s7, 5, go_smash_no_bot
+	beq $t8, 1, puz_req_no_bot
+	#bge 	$t7, 5, go_smash
+
+follow_fruit:
+
+	lw	$t2, BOT_X
+	lw	$t3, 8($t0) 	#fruit-x
+	sub	$t4, $t3, $t2
+	beq	$t4, $0, stop
+	slt 	$t5, $t4, 10
+	sgt 	$t6, $t4, -10
+	and 	$t7, $t5, $t6
+	beq	$t7, 1, update
+	blt	$t4, $0, go_left
+	bgt	$t4, $0, go_right
+
+stop:
+	li	$t4, 0
+	j	update
+go_left:
+	li	$t4, -10
+	j	update
+go_right:
+	li	$t4, 10
+	j	update
+update:
+	sw	$t4, VELOCITY
+	j	sel
+
+get_back:
+	li	$t0, 10
+	sw	$t0, VELOCITY
+	lw	$t0, BOT_Y
+	ble	$t0, 270, start
+	j	get_back
 
 loop:
+	bge $s7, 5, go_smash
 	beq $t8, 1, puz_req
 	beq $t7, 1 follow
 	#othewise collect fruit
@@ -121,6 +179,40 @@ rev_neg:
 	mul $t1, $t1, $t2 
 	sw	$t1, VELOCITY		# ???
 	j loop
+
+puz_req_no_bot:
+	la $t9, puzzle_grid
+	sw $t9, REQUEST_PUZZLE
+	li $t8, 0
+	j follow_fruit
+
+go_smash_no_bot:
+	li $t1, 90
+	sw $t1, ANGLE
+	li $t1, 1
+	sw $t1, ANGLE_CONTROL
+	li $t1, 10
+	sw $t1, VELOCITY
+	j go_to_smash_site_no_bot
+
+go_to_smash_site_no_bot:
+	lw $t1, ANGLE
+	beq $t1, 270, start
+	j go_to_smash_site_no_bot
+
+go_smash:
+	li $t1, 90
+	sw $t1, ANGLE
+	li $t1, 1
+	sw $t1, ANGLE_CONTROL
+	li $t1, 10
+	sw $t1, VELOCITY
+	j go_to_smash_site
+
+go_to_smash_site:
+	lw $t1, ANGLE
+	beq $t1, 270, loop
+	j go_to_smash_site
 
 # -----------------------------------------------------------------------
 # sb_arctan - computes the arctangent of y / x
@@ -223,8 +315,31 @@ interrupt_dispatch:			# Interrupt:
 	j	done
 
 bonk_interrupt:
-	sw	$a1, BONK_ACK		# acknowledge interrupt
-	j	interrupt_dispatch	# see if other interrupts are waiting
+	#sw	$a1, BONK_ACK		# acknowledge interrupt
+	#j	interrupt_dispatch	# see if other interrupts are waiting
+
+	sw	$0, VELOCITY
+
+	lw	$t0, BOT_Y
+	blt	$t0, 270, bonk_ret
+	
+	smash_fruit:
+		beq $0, $s7, finished_smashing
+		
+		sw $s7, FRUIT_SMASH
+		
+		sub $s7, $s7, 1
+		j 	smash_fruit
+
+	finished_smashing:
+		li	$t0, 270
+		sw	$t0, ANGLE
+		li 	$t1, 1
+		sw 	$t1, ANGLE_CONTROL
+
+	bonk_ret:
+		sw	$a1, BONK_ACK		# acknowledge interrupt
+		j	interrupt_dispatch	# see if other interrupts are waiting
 
 puzzle_interrupt:
 	sw	$a1, PUZZLE_ACK		# acknowledge interrupt
@@ -235,21 +350,26 @@ puzzle_interrupt:
 	la $a1, puzzle_word
 	sw $a1, REQUEST_WORD
 
+	lw $t1, 0($t9)		#num_rows
+	lw $t2, 4($t9)		#num_cols
+	
+	mul $t3, $t1, $t2	
+
+	bge $t3, 3000, skip
+
 	add $a0, $t9, 8 	# pointer to puzzle
 
 	jal solve_puzzle
-	li $t8, 1	
 	beq $v0, 0, interrupt_dispatch
 	sw $v0, SUBMIT_SOLUTION	
 
+	skip:
+	li $t8, 1
 	j	interrupt_dispatch	# see if other interrupts are waiting
 
 smoosh_interrupt:
 	sw	$a1, SMOOSHED_ACK		# acknowledge interrupt
-	la $t0, smoosh_count
-	lw $t1, 0($t0)
-	add $t1, $t1, 1
-	sw $t1, 0($t0)
+	add	$s7, $s7, 1
 	j	interrupt_dispatch	# see if other interrupts are waiting
 
 timer_interrupt:
@@ -546,11 +666,17 @@ sp_done:
 
 .globl get_char
 get_char:
-	lw $v0, 4($t9)
-	mul	$v0, $a1, $v0	# row * num_cols
+	lw $t2, 4($t9)
+	mul	$v0, $a1, $t2	# row * num_cols
 	add	$v0, $v0, $a2	# row * num_cols + col
 	add	$v0, $a0, $v0	# &array[row * num_cols + col]
+	move	$t1, $v0
 	lb	$v0, 0($v0)	# array[row * num_cols + col]
+	
+	#lb	$0, 4($t1) 	# Prefetch next four elements
+	#add	$t1, $t1, $t2
+	#lb	$0, 0($t1) 	# Prefetch four elements one row below
+
 	jr	$ra
 
 .globl set_char

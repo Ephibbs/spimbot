@@ -24,7 +24,6 @@ PUZZLE_ACK    = 0xffff00d8
 SMOOSHED_MASK	= 0x2000
 SMOOSHED_ACK	= 0xffff0064
 
-
 REQUEST_PUZZLE = 0xffff00d0
 REQUEST_WORD = 0xffff00dc
 SUBMIT_SOLUTION = 0xffff00d4
@@ -58,9 +57,11 @@ main:
 	li	$t4, TIMER_MASK		# timer interrupt enable bit
 	or	$t4, $t4, BONK_MASK	# bonk interrupt bit
 	or	$t4, $t4, PUZZLE_MASK	# bonk interrupt bit
+	or	$t4, $t4, SMOOSHED_MASK	# smoosh interrupt bit
 	or	$t4, $t4, 1		# global interrupt enable
 	mtc0	$t4, $12		# set interrupt mask (Status register)
 	li 	$t1, 10
+	li	$s7, 0
 	#sw $t1, VELOCITY
 	li	$t8, 1
 	
@@ -96,7 +97,7 @@ sel:
 
 	#lw	$t7, num_smooshed
 	lw 	$s0, GET_ENERGY
-	ble	$s0, 200, go_smash
+	bge	$s7, 5, go_smash
 	#bge 	$t7, 5, go_smash
 
 	lw	$t2, BOT_X
@@ -189,6 +190,9 @@ interrupt_dispatch:			# Interrupt:
 	
 	and	$a0, $k0, PUZZLE_MASK	# is there a puzzle interrupt?                
 	bne	$a0, 0, puzzle_interrupt   
+	
+	and	$a0, $k0, SMOOSHED_MASK
+	bne	$a0, 0, smoosh_interrupt
 
 	li	$v0, PRINT_STRING	# Unhandled interrupt types
 	la	$a0, unhandled_str
@@ -240,6 +244,12 @@ puzzle_interrupt:
 	#sw $0, PRINT_INT
 
 	j	interrupt_dispatch	# see if other interrupts are waiting
+
+smoosh_interrupt:
+	sw	$a1, SMOOSHED_ACK		# acknowledge interrupt
+	add	$s7, $s7, 1
+	j	interrupt_dispatch	# see if other interrupts are waiting
+
 
 timer_interrupt:
 	sw	$a1, TIMER_ACK		# acknowledge interrupt
