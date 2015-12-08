@@ -80,11 +80,18 @@ main:
 no_bot:
 
 start:
-	sw	$0, VELOCITY
+	li	$t0, 90
+	sw	$t0, ANGLE
+	li 	$t0, 1
+	sw 	$t0, ANGLE_CONTROL
+	li	$t0, 10
+	sw	$t0, VELOCITY
+	lw	$t0, BOT_Y
+	blt	$t0, 270, start
 	li	$t0, 0
 	sw	$t0, ANGLE
-	li 	$t1, 1
-	sw 	$t1, ANGLE_CONTROL
+	li 	$t0, 1
+	sw 	$t0, ANGLE_CONTROL
 	j	sel
 
 #update_closest:
@@ -93,8 +100,8 @@ start:
 #	j	find_fruit
 
 sel:
-	la	$s4, fruit_data
-	sw	$s4, FRUIT_SCAN
+	la	$s3, fruit_data
+	sw	$s3, FRUIT_SCAN
 
 	#li	$t6, 9000
 	#li	$t4, 0
@@ -103,9 +110,9 @@ sel:
 	beq 	$t8, 1, puz_req_no_bot
 
 find_fruit:
-	lw	$t2, 0($s4)
-	beq	$t2, 0, start
-	lw	$t2, 8($s4)	#point value
+	lw	$s2, 0($s3)
+	beq	$s2, 0, sel
+	lw	$s2, 4($s3)	#point value
 
 	#sub	$t5, $t2, $t5
 	#mul	$t5, $t5, $t5 #this fruit distance
@@ -115,36 +122,43 @@ find_fruit:
 
 	#bgt	$t5, 100, find_fruit
 	#lw	$t5, 4($t3)
-	#beq	$t2, 10, move_bot
-	#beq	$t2, 4, move_bot
-	beq	$t2, 1, move_bot
-	add	$s4, $s4, 16
-	j find_fruit
+	#beq	$s2, 10, move_bot
+	beq	$s2, 4, move_bot
+	beq	$s2, 1, move_bot
+	add	$s3, $s3, 16
+	j 	find_fruit
 
 move_bot:
-	lw	$t2, 8($s4)
+	lw	$t2, 8($s3)
 	sub	$t3, $t2, $s6		#x velocity
 	move	$s6, $t2
 	
-	lw	$t4, 12($s4)
-	sub	$s1, $t4, $s5		#y velocity
-	move	$s5, $t4
+	lw	$s4, 12($s3)
+	sub	$s1, $s4, $s5		#y velocity
+	move	$s5, $s4
 
-	lw	$s3, BOT_Y
+	mul	$s4, $s1, $t3
+	beq	$s4, $0, sel
 
-	sub	$t4, $s5, $s3
-	mul	$t4, $t4, -1
-	
-	div 	$t4, $s1
-	mflo	$s1
+	lw	$s4, BOT_Y
 
-	mul	$t4, $s1, $t3
-	add	$t4, $s6, $t4
+	sub	$t4, $s4, $s1	# delta y
 	
-	li	$t3, 300
-	
-	div	$t4, $t3
-	mfhi	$t3
+	div	$t4, $s1	# delta t
+	mflo	$t0
+	mfhi	$t2
+	mul	$t0, $t3, $t0	# delta x
+
+	mul	$t2, $t3, $t2
+	div	$t2, $s1
+	mflo	$t1
+
+	add	$t0, $t1, $t0
+	add	$t0, $t0, $s6	# delta x + x pos
+
+	li	$t1, 300
+	div	$t0, $t1
+	mfhi	$s2
 
 	#lw	$t7, num_smooshed
 	#lw 	$s0, GET_ENERGY
@@ -153,7 +167,7 @@ move_bot:
 
 	#lw	$t3, 8($t7) 	#fruit-x
 	lw	$s3, BOT_X
-	sub	$t4, $t3, $s3
+	sub	$t4, $s2, $s3
 	beq	$t4, $0, stop
 	slt 	$t5, $t4, 10
 	sgt 	$t6, $t4, -10
@@ -241,7 +255,7 @@ puz_req_no_bot:
 	la $t9, puzzle_grid
 	sw $t9, REQUEST_PUZZLE
 	li $t8, 0
-	j move_bot
+	j sel
 
 go_smash_no_bot:
 	li $t1, 90
@@ -399,7 +413,7 @@ bonk_interrupt:
 	sw	$0, VELOCITY
 
 	lw	$t0, BOT_Y
-	blt	$t0, 270, bonk_ret
+	blt	$t0, 290, bonk_ret
 	
 	smash_fruit:
 		beq $0, $s7, finished_smashing

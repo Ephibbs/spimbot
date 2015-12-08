@@ -82,26 +82,53 @@ get_back:
 	ble	$t0, 270, charge
 	j	get_back
 
+
 start:
 	sw	$0, VELOCITY
 	li	$t0, 0
 	sw	$t0, ANGLE
 	li 	$t1, 1
 	sw 	$t1, ANGLE_CONTROL
+	j	sel
+
+find_fruit:
+	add	$t0, $t0, 16
+	lw	$t1, 0($t0)
+	beq	$t1, 0, move_bot
+	lw	$t1, 8($t0)
+
+	sub	$t3, $t2, $t1
+	mul	$t4, $t3, $t3 #this fruit distance
+
+	sub	$t3, $t2, $t6
+	mul	$t5, $t3, $t3 #closest fruit distance
+
+	bge	$t4, $t5, find_fruit
+
+update_closest:
+	move	$t6, $t1
+	move	$t7, $t0
+	j	find_fruit
 
 sel:
 	la	$t0, fruit_data
 	sw	$t0, FRUIT_SCAN
-	lw	$t1, 0($t0)
-	beq	$t1, 0, end
+	move	$t7, $t0
+	sub	$t0, $t0, 16
+
+	lw	$t2, BOT_X
+	li	$t6, 9000
+
+	j 	find_fruit
+
+move_bot:
 
 	#lw	$t7, num_smooshed
 	lw 	$s0, GET_ENERGY
 	bge	$s7, 5, go_smash
 	#bge 	$t7, 5, go_smash
 
-	lw	$t2, BOT_X
-	lw	$t3, 8($t0) 	#fruit-x
+	lw	$t3, 8($t7) 	#fruit-x
 	sub	$t4, $t3, $t2
 	beq	$t4, $0, stop
 	slt 	$t5, $t4, 10
@@ -113,18 +140,20 @@ sel:
 
 stop:
 	li	$t4, 0
-	j	update
+	sw	$t4, VELOCITY
+	j	sel
 go_left:
 	li	$t4, -10
-	j	update
+	sw	$t4, VELOCITY
+	j	sel
 go_right:
 	li	$t4, 10
-	j	update
+	sw	$t4, VELOCITY
+	j	sel
 update:
 	sw	$t4, VELOCITY
 	j	sel
-end:
-	j	sel
+
 go_smash:
 	li $t1, 90
 	sw $t1, ANGLE

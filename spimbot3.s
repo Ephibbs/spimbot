@@ -71,59 +71,59 @@ main:
 	lw $t0, OTHER_BOT_X
 	li $t7, 1
 	li $s7, 0
-	li $s1, 0
+	li $s6, 0
 	beq	$t0, 0, no_bot
 	j loop
 
 no_bot:
 
-find_new_fruit:
-	li	$s1, 32
-
-find_fruit:
-	add	$t0, $t0, 16	
-	lw	$t1, 0($t0)
-	beq	$t1, $s1, next_step
-	bne	$t1, 0, find_fruit
-
 start:
 	li	$t0, 90
 	sw	$t0, ANGLE
-	li 	$t1, 1
-	sw 	$t1, ANGLE_CONTROL
+	li 	$t0, 1
+	sw 	$t0, ANGLE_CONTROL
 	li	$t0, 10
 	sw	$t0, VELOCITY
 	lw	$t0, BOT_Y
-	blt	$t0, 270, start
+	blt	$t0, 290, start
 	li	$t0, 0
 	sw	$t0, ANGLE
-	li 	$t1, 1
-	sw 	$t1, ANGLE_CONTROL
+	li 	$t0, 1
+	sw 	$t0, ANGLE_CONTROL
 
 sel:
-	la	$t0, fruit_data
-	sw	$t0, FRUIT_SCAN
-	sub	$t0, $t0, 16
+	la	$s3, fruit_data
+	sw	$s3, FRUIT_SCAN
+	move	$s4, $s3	#keep copy of pointer for if new fruit
+	lw	$t2, 0($s3)	#get id
+	beq	$t2, 0, sel	#if not found, get new one
+	sub	$s3, $s3, 16
 
+find_fruit:
+	add	$s3, $s3, 16	
+	lw	$t2, 0($s3)	#get id
+	beq	$t2, 0, find_new_fruit	#if not found, get new one
+	beq	$t2, $s6, next_step	#if right id, move on
 	j	find_fruit
-next_step:
-	beq	$s1, 0, find_new_fruit
-	
 
-	#lw	$t7, num_smooshed
+find_new_fruit:
+	add	$s3, $s4, 0	
+	lw	$s6, 4($s3)	#point_count
+	bne	$s6, 10, next_step
+	add	$s4, $s4, 16
+	j	find_new_fruit
+
+next_step:
+	lw	$s6, 0($s3)	#point_count
+	lw	$t2, 8($s3) 	#fruit-x
 	lw 	$s0, GET_ENERGY
-	bge	$s7, 5, go_smash_no_bot
+	bge	$s7, 1, go_smash_no_bot
 	beq $t8, 1, puz_req_no_bot
-	#bge 	$t7, 5, go_smash
 
 follow_fruit:
+	lw	$t3, BOT_X
 
-	lw	$t2, BOT_X
-	lw	$t3, 0($t0) 	#fruit-x
-
-
-
-	sub	$t4, $t3, $t2
+	sub	$t4, $t2, $t3
 	beq	$t4, $0, stop
 	slt 	$t5, $t4, 10
 	sgt 	$t6, $t4, -10

@@ -77,7 +77,14 @@ main:
 no_bot:
 
 start:
-	sw	$0, VELOCITY
+	li	$t0, 90
+	sw	$t0, ANGLE
+	li 	$t1, 1
+	sw 	$t1, ANGLE_CONTROL
+	li	$t0, 10
+	sw	$t0, VELOCITY
+	lw	$t0, BOT_Y
+	blt	$t0, 290, start
 	li	$t0, 0
 	sw	$t0, ANGLE
 	li 	$t1, 1
@@ -125,7 +132,7 @@ get_back:
 	li	$t0, 10
 	sw	$t0, VELOCITY
 	lw	$t0, BOT_Y
-	ble	$t0, 270, start
+	ble	$t0, 290, start
 	j	get_back
 
 loop:
@@ -321,7 +328,7 @@ bonk_interrupt:
 	sw	$0, VELOCITY
 
 	lw	$t0, BOT_Y
-	blt	$t0, 270, bonk_ret
+	blt	$t0, 290, bonk_ret
 	
 	smash_fruit:
 		beq $0, $s7, finished_smashing
