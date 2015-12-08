@@ -75,15 +75,15 @@ main:
 	li $s4, 0	#target aquired
 	li $t7, 1 	#assume other bot present $t7 = 1
 	lw $t0, OTHER_BOT_X
-	bne	$t0, 0, loop
 	lw $t1, OTHER_BOT_Y
+	bne	$t0, 0, loop
 	bne	$t1, 0, loop
 	#other bot not present
 	li $t7, 0 	
 	#go to no_bot_loop
 
 no_bot_loop:
-	beq $t8, 1, puz_req
+	beq	$t7, 1, loop
 	bge $s7, 5, go_smash
 	beq $s4, 0, find_target	
 	la $s0, fruit_data
@@ -97,6 +97,7 @@ find_pos:
 	bne $t3, $s4, find_pos
 
 follow_target:
+	beq $t8, 1, puz_req
 	lw $t2, 12($s0)
 	lw $t3, BOT_Y
 	sub $t2, $t2, $t3
@@ -131,6 +132,8 @@ locate:
 	add $s0, $s0, 16 
 	lw $t3, 0($s0)
 	beq $t3, $0, find_target
+	lw $t4, 4($s0)
+	beq $t4, 10, locate
 	lw $t4, 12($s0)
 	lw $t2, BOT_Y
 	sub $t4, $t2, $t4	
@@ -151,9 +154,11 @@ c_locate:
 	move $s4, $t3
 	j no_bot_loop
 
-loop: 
-	beq $t8, 1, puz_req
+loop:
 	bge $s7, 5, go_smash
+	beq $t8, 1, puz_req
+	beq $t7, 1 follow
+	#othewise collect fruit
 	j loop
 
 follow:
@@ -217,7 +222,6 @@ go_smash:
 	li $t1, 10
 	sw $t1, VELOCITY
 	bgt $s7, 0, puz_req_go
-	j done_smash
 
 done_smash:
 	#beq $t7, 1, loop
